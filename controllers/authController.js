@@ -8,6 +8,10 @@ const ApiError = require('../utils/apiError');
 const sendEmail = require('../utils/sendEmail');
 const User = require('../models/userModel');
 
+
+const secret = process.env.JWT_SECRET;
+
+
 // @desc      Signup
 // @route     POST /api/v1/auth/signup
 // @access    Public
@@ -27,6 +31,10 @@ exports.signup = asyncHandler(async (req, res, next) => {
 
   res.status(201).json({ data: user, token });
 });
+
+
+
+
 
 // @desc      Login
 // @route     POST /api/v1/auth/login
@@ -76,34 +84,53 @@ exports.auth = asyncHandler(async (req, res, next) => {
   // 2- Verify the token (check if the token changes the payload or the token is expired)
   // two errors maybe happens : 1- invalid token 2- expired token
   // convert a method that returns responses using a callback function to return a responses in a promise object
-  const decoded = jwt.verify(token, process.env.JWT_SECRET);
+  // const decoded = jwt.verify(token, process.env.JWT_SECRET);
   // console.log(decoded);
-
-  // 3- Check the user exists
-  const currentUser = await User.findById(decoded.id);
-  if (!currentUser) {
-    return next(
-      new ApiError('The user that belong to this token does no longer exist')
-    );
-  }
-  // 4- Check if user change his password after generating the token
-  if (currentUser.passwordChangedAt) {
-    const passChangedTimestamp = parseInt(
-      currentUser.passwordChangedAt.getTime() / 1000,
-      10
-    );
-    if (passChangedTimestamp > decoded.iat) {
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const currentUser = await User.findById(decoded.id);
+    if (!currentUser) {
       return next(
-        new ApiError(
-          'User recently changed password! Please login again..',
-          401
-        )
+        new ApiError('The user that belong to this token does no longer exist')
       );
     }
-    // console.log(passChangedTimestamp, decoded.iat);
+    if (currentUser.passwordChangedAt) {
+      const passChangedTimestamp = parseInt(
+        currentUser.passwordChangedAt.getTime() / 1000,
+        10
+      );
+      if (passChangedTimestamp > decoded.iat) {
+        return next(
+          new ApiError(
+            'User recently changed password! Please login again..',
+            401
+          )
+        );
+      }
+      // console.log(passChangedTimestamp, decoded.iat);
+    }
+    // Grant access to the protected routes
+    req.user = currentUser;
+
+
+
+
+
+
+
+
+
+
+
+  } catch (err) {
+    console.error('JWT verification failed', err);
+    res.status(401).json({ message: 'Unauthorized' });
   }
-  // Grant access to the protected routes
-  req.user = currentUser;
+  // 3- Check the user exists
+
+
+ 
+  // 4- Check if user change his password after generating the token
   next();
 });
 
